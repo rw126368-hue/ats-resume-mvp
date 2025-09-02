@@ -1,10 +1,10 @@
 {
   "name": "ATS Resume Generator (Codespaces)",
   "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
-  "features": {
-    "ghcr.io/devcontainers/features/pnpm:1": {}
-  },
-  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+
+  "postCreateCommand": "npm install -g pnpm && pnpm install",
+  "postStartCommand": "pnpm dev",
+
   "forwardPorts": [3000],
   "portsAttributes": {
     "3000": {
@@ -12,8 +12,7 @@
       "onAutoForward": "openBrowser"
     }
   },
-  "postCreateCommand": "pnpm install",
-  "postStartCommand": "pnpm dev",
+
   "customizations": {
     "vscode": {
       "extensions": [
