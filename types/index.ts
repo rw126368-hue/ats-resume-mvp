@@ -35,19 +35,18 @@ export interface ResumeTemplate {
 
 export interface JobPosting {
   id: string;
+  user_id: string;
   title: string;
   company: string;
   description: string;
-  requirements?: any;
+  requirements?: string;
   location?: string;
-  salary_min?: number;
-  salary_max?: number;
+  salary_range?: string;
   job_type?: string;
-  remote_allowed: boolean;
   source?: string;
-  external_id?: string;
-  scraped_at: string;
-  is_active: boolean;
+  application_url?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface GeneratedResume {
@@ -125,6 +124,7 @@ export interface JobApplication {
   updated_at: string;
 }
 
+
 // API Response Types
 export interface ApiResponse<T> {
   data?: T;
@@ -167,4 +167,26 @@ export interface CreateJobApplicationRequest {
   job_description?: string;
   status?: string;
   notes?: string;
+}
+
+export interface EmailJobNotification {
+  id: string;
+  subject: string;
+  from: string;
+  body: string;
+  received_date: Date;
+  job_title?: string;
+  company_name?: string;
+  job_description?: string;
+  application_url?: string;
+  processed: boolean;
+}
+
+export interface AutoApplicationResult {
+  job_id: string;
+  resume_id: string;
+  match_score: number;
+  applied: boolean;
+  application_url?: string;
+  error?: string;
 }

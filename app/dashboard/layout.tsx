@@ -23,7 +23,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Resume Management', href: '/dashboard/resumes', icon: FileText },
   { name: 'AI Analysis', href: '/dashboard/analysis', icon: Brain },
-  { name: 'Job Applications', href: '/dashboard/applications', icon: Briefcase },
+  { name: 'Job Applications', href: '/dashboard/jobs', icon: Briefcase },
   { name: 'Notifications', href: '/dashboard/notifications', icon: Bell },
 ];
 
@@ -95,7 +95,7 @@ export default function DashboardLayout({
                     </div>
                     <div className="ml-3">
                       <p className="text-sm font-medium text-gray-700 group-hover:text-gray-900">
-                        {user?.name || 'User'}
+                        {user?.full_name || 'User'}
                       </p>
                       <p className="text-xs font-medium text-gray-500 group-hover:text-gray-700 truncate">
                         {user?.email}
@@ -166,7 +166,7 @@ export default function DashboardLayout({
                     </div>
                     <div className="ml-3">
                       <p className="text-sm font-medium text-gray-700 group-hover:text-gray-900">
-                        {user?.name || 'User'}
+                        {user?.full_name || 'User'}
                       </p>
                       <p className="text-xs font-medium text-gray-500 group-hover:text-gray-700 truncate">
                         {user?.email}

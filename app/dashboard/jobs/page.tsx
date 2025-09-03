@@ -7,14 +7,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { supabase } from '@/lib/supabase/client';
 import { useJobApplications } from '@/hooks/useJobApplications';
 import { useResumes } from '@/hooks/useResumes';
 import { useToast } from '@/hooks/use-toast';
 import { formatDate, getStatusColor } from '@/lib/utils';
-import { 
-  Briefcase, 
-  Plus, 
-  Building, 
+import {
+  Briefcase,
+  Plus,
+  Building,
   Calendar,
   FileText,
   BarChart3,
@@ -22,7 +24,11 @@ import {
   Search,
   Eye,
   Edit,
-  Trash2
+  Trash2,
+  Target,
+  Sparkles,
+  ExternalLink,
+  Mail
 } from 'lucide-react';
 
 interface JobApplicationFormData {
@@ -43,9 +49,32 @@ const statusOptions = [
 
 export default function JobApplicationsPage() {
   const { applications, loading, fetchApplications, createApplication, updateApplication, getApplicationStats } = useJobApplications();
-  const { resumes, fetchResumes } = useResumes();
+  const {
+    resumes,
+    jobs,
+    emailNotifications,
+    autoApplications,
+    emailMonitoring,
+    dbUsage,
+    fetchResumes,
+    matchJobsWithResume,
+    fetchJobs,
+    saveJob,
+    deleteJob,
+    checkEmailsForJobs,
+    processJobFromEmail,
+    autoApplyToJobs,
+    startEmailMonitoring,
+    stopEmailMonitoring,
+    monitorDatabaseUsage,
+    cleanupOldData,
+    deduplicateJobs,
+    createDataBackup,
+    sendGmailBackup,
+    performFullBackup
+  } = useResumes();
   const { toast } = useToast();
-  
+
   const [showForm, setShowForm] = useState(false);
   const [editingApp, setEditingApp] = useState<any>(null);
   const [formData, setFormData] = useState<JobApplicationFormData>({
@@ -58,6 +87,27 @@ export default function JobApplicationsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [submitting, setSubmitting] = useState(false);
+
+  // Job search and matching
+  const [showJobSearch, setShowJobSearch] = useState(false);
+  const [jobDescription, setJobDescription] = useState('');
+  const [selectedResumeForMatching, setSelectedResumeForMatching] = useState('');
+  const [matchingResults, setMatchingResults] = useState<any>(null);
+  const [matching, setMatching] = useState(false);
+
+  // Job management
+  const [showSaveJob, setShowSaveJob] = useState(false);
+  const [jobFormData, setJobFormData] = useState({
+    title: '',
+    company: '',
+    description: '',
+    requirements: '',
+    location: '',
+    salary_range: '',
+    job_type: 'full-time',
+    application_url: ''
+  });
+  const [savingJob, setSavingJob] = useState(false);
 
   useEffect(() => {
     fetchApplications();
@@ -135,6 +185,71 @@ export default function JobApplicationsPage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleJobMatch = async () => {
+    if (!selectedResumeForMatching || !jobDescription.trim()) {
+      toast({
+        title: 'Missing Information',
+        description: 'Please select a resume and enter a job description',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setMatching(true);
+    try {
+      const results = await matchJobsWithResume(selectedResumeForMatching, jobDescription);
+      setMatchingResults(results);
+      toast({
+        title: 'Match Analysis Complete',
+        description: `Your resume matches ${results.match_score}% with this job`,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Matching Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setMatching(false);
+    }
+  };
+
+  const handleSaveJob = async () => {
+    if (!jobFormData.title || !jobFormData.company || !jobFormData.description) {
+      toast({
+        title: 'Missing Information',
+        description: 'Please fill in the required fields (title, company, description)',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSavingJob(true);
+    try {
+      await saveJob(jobFormData);
+      setJobFormData({
+        title: '',
+        company: '',
+        description: '',
+        requirements: '',
+        location: '',
+        salary_range: '',
+        job_type: 'full-time',
+        application_url: ''
+      });
+      setShowSaveJob(false);
+    } catch (error: any) {
+      // Error is already handled in the hook
+    } finally {
+      setSavingJob(false);
+    }
+  };
+
+  const handleJobFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setJobFormData(prev => ({ ...prev, [name]: value }));
   };
 
   // Filter applications
@@ -354,6 +469,113 @@ export default function JobApplicationsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Database Usage Monitor */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span className="flex items-center">
+              <BarChart3 className="mr-2 h-5 w-5" />
+              Database Usage (Supabase Free Tier: 50MB)
+            </span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={monitorDatabaseUsage}>
+                Refresh
+              </Button>
+              <Button variant="outline" size="sm" onClick={async () => {
+                try {
+                  const { data, error } = await supabase.from('job_postings').select('count', { count: 'exact', head: true });
+                  if (error) {
+                    alert(`Database Test Failed: ${error.message}\n\nPlease check:\n1. job_postings table exists\n2. RLS policies are set up\n3. User has proper permissions`);
+                  } else {
+                    alert(`✅ Database Connection Successful!\nFound ${data} job postings`);
+                  }
+                } catch (err: any) {
+                  alert(`❌ Database Test Failed: ${err.message}`);
+                }
+              }}>
+                Test DB
+              </Button>
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Used: {(dbUsage.used / (1024 * 1024)).toFixed(2)} MB</span>
+              <span className="text-sm font-medium">Limit: {(dbUsage.limit / (1024 * 1024)).toFixed(0)} MB</span>
+            </div>
+            <Progress
+              value={(dbUsage.used / dbUsage.limit) * 100}
+              className={`w-full ${((dbUsage.used / dbUsage.limit) * 100) > 80 ? 'bg-red-100' : 'bg-green-100'}`}
+            />
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{((dbUsage.used / dbUsage.limit) * 100).toFixed(1)}% used</span>
+              <span>{((dbUsage.limit - dbUsage.used) / (1024 * 1024)).toFixed(2)} MB remaining</span>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={cleanupOldData}>
+                Clean Old Data
+              </Button>
+              <Button variant="outline" size="sm" onClick={deduplicateJobs}>
+                Remove Duplicates
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Gmail Backup System */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Mail className="mr-2 h-5 w-5" />
+            Gmail Backup System
+          </CardTitle>
+          <CardDescription>
+            Automatic data backup to your Gmail for redundancy and 50MB limit management
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Backup Email</p>
+                <p className="text-xs text-muted-foreground">
+                  {process.env.USER_GMAIL_ADDRESS || 'Not configured'}
+                </p>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-xs text-muted-foreground">Auto: Weekly</span>
+                <Button variant="outline" size="sm" onClick={performFullBackup}>
+                  Backup Now
+                </Button>
+              </div>
+            </div>
+
+            <div className="p-3 bg-blue-50 rounded-lg">
+              <h4 className="text-sm font-medium text-blue-900 mb-2">Gmail Setup Instructions:</h4>
+              <ol className="text-xs text-blue-800 space-y-1">
+                <li>1. Go to Gmail → Settings → See all settings → Filters and Blocked Addresses</li>
+                <li>2. Create a new filter for emails from: your-email@gmail.com</li>
+                <li>3. Add subject filter: "ATS Resume Generator Backup"</li>
+                <li>4. Choose action: Apply label "ATS-Backups" (create new label)</li>
+                <li>5. Skip Inbox, Apply label</li>
+              </ol>
+            </div>
+
+            <div className="text-xs text-muted-foreground">
+              <p><strong>Benefits:</strong></p>
+              <ul className="list-disc list-inside space-y-1 mt-1">
+                <li>Data redundancy outside Supabase database</li>
+                <li>Automatic weekly backups</li>
+                <li>Prevents data loss if database reaches 50MB limit</li>
+                <li>Easy restoration from Gmail archives</li>
+              </ul>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Job Applications</h2>
@@ -399,6 +621,408 @@ export default function JobApplicationsPage() {
           icon={BarChart3}
         />
       </div>
+
+      {/* Job Management */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="text-lg font-semibold">Job Database</h3>
+          <p className="text-sm text-muted-foreground">
+            Save and manage job postings for future reference
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={() => setShowSaveJob(!showSaveJob)} variant="outline">
+            <Plus className="mr-2 h-4 w-4" />
+            {showSaveJob ? 'Cancel' : 'Save Job Posting'}
+          </Button>
+          <Button onClick={() => setShowJobSearch(!showJobSearch)}>
+            <Target className="mr-2 h-4 w-4" />
+            {showJobSearch ? 'Hide Job Search' : 'Find Matching Jobs'}
+          </Button>
+        </div>
+      </div>
+
+      {/* Automated Job Processing */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="text-lg font-semibold">Automated Job Processing</h3>
+          <p className="text-sm text-muted-foreground">
+            Monitor emails for job notifications and auto-apply to high matches
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            onClick={emailMonitoring ? stopEmailMonitoring : startEmailMonitoring}
+            variant={emailMonitoring ? "destructive" : "default"}
+          >
+            {emailMonitoring ? 'Stop Monitoring' : 'Start Email Monitoring'}
+          </Button>
+          <Button onClick={checkEmailsForJobs} variant="outline">
+            Check Emails Now
+          </Button>
+          <Button onClick={() => autoApplyToJobs(90)} variant="outline">
+            Auto-Apply (90%+ Match)
+          </Button>
+        </div>
+      </div>
+
+      {/* Email Notifications */}
+      {emailNotifications.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Job Notifications</CardTitle>
+            <CardDescription>
+              Job opportunities found in your email
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {emailNotifications.map((notification) => (
+                <div key={notification.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">{notification.subject}</p>
+                    <p className="text-xs text-muted-foreground">
+                      From: {notification.from} • {notification.received_date.toLocaleDateString()}
+                    </p>
+                    {notification.job_title && (
+                      <p className="text-xs text-blue-600">
+                        {notification.job_title} at {notification.company_name}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    {notification.processed ? (
+                      <Badge variant="secondary">Processed</Badge>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={() => processJobFromEmail(notification)}
+                      >
+                        Process Job
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Auto-Application Results */}
+      {autoApplications.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Auto-Application Results</CardTitle>
+            <CardDescription>
+              Jobs automatically applied to based on resume matching
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {autoApplications.map((result, index) => {
+                const job = jobs.find(j => j.id === result.job_id);
+                const resume = resumes.find(r => r.id === result.resume_id);
+                return (
+                  <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">
+                        {job?.title} at {job?.company}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Applied with: {resume?.title}
+                      </p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Badge variant="outline" className="text-green-600">
+                        {result.match_score}% match
+                      </Badge>
+                      {result.applied ? (
+                        <Badge variant="secondary">Applied</Badge>
+                      ) : (
+                        <Badge variant="destructive">Failed</Badge>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {showSaveJob && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Save Job Posting</CardTitle>
+            <CardDescription>
+              Add a job posting to your database for future reference and matching
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label htmlFor="job-title">Job Title *</Label>
+                <Input
+                  id="job-title"
+                  name="title"
+                  value={jobFormData.title}
+                  onChange={handleJobFormChange}
+                  placeholder="e.g. Senior Software Engineer"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="job-company">Company *</Label>
+                <Input
+                  id="job-company"
+                  name="company"
+                  value={jobFormData.company}
+                  onChange={handleJobFormChange}
+                  placeholder="e.g. Google"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="job-description">Job Description *</Label>
+              <Textarea
+                id="job-description"
+                name="description"
+                value={jobFormData.description}
+                onChange={handleJobFormChange}
+                placeholder="Paste the full job description here..."
+                rows={6}
+                required
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label htmlFor="job-requirements">Requirements</Label>
+                <Textarea
+                  id="job-requirements"
+                  name="requirements"
+                  value={jobFormData.requirements}
+                  onChange={handleJobFormChange}
+                  placeholder="Key requirements and qualifications..."
+                  rows={3}
+                />
+              </div>
+              <div>
+                <Label htmlFor="job-location">Location</Label>
+                <Input
+                  id="job-location"
+                  name="location"
+                  value={jobFormData.location}
+                  onChange={handleJobFormChange}
+                  placeholder="e.g. San Francisco, CA"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <div>
+                <Label htmlFor="job-salary">Salary Range</Label>
+                <Input
+                  id="job-salary"
+                  name="salary_range"
+                  value={jobFormData.salary_range}
+                  onChange={handleJobFormChange}
+                  placeholder="e.g. $120k - $150k"
+                />
+              </div>
+              <div>
+                <Label htmlFor="job-type">Job Type</Label>
+                <select
+                  id="job-type"
+                  name="job_type"
+                  value={jobFormData.job_type}
+                  onChange={handleJobFormChange}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="full-time">Full-time</option>
+                  <option value="part-time">Part-time</option>
+                  <option value="contract">Contract</option>
+                  <option value="freelance">Freelance</option>
+                  <option value="internship">Internship</option>
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="application-url">Application URL</Label>
+                <Input
+                  id="application-url"
+                  name="application_url"
+                  value={jobFormData.application_url}
+                  onChange={handleJobFormChange}
+                  placeholder="https://..."
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button onClick={handleSaveJob} disabled={savingJob}>
+                {savingJob ? (
+                  <>
+                    <BarChart3 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Save Job
+                  </>
+                )}
+              </Button>
+              <Button variant="outline" onClick={() => setShowSaveJob(false)}>
+                Cancel
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {showJobSearch && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Search className="mr-2 h-5 w-5" />
+                Job Description
+              </CardTitle>
+              <CardDescription>
+                Paste a job description to match with your resume
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="resume-match">Select Resume</Label>
+                <select
+                  id="resume-match"
+                  value={selectedResumeForMatching}
+                  onChange={(e) => setSelectedResumeForMatching(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">Choose a resume...</option>
+                  {resumes.map((resume) => (
+                    <option key={resume.id} value={resume.id}>
+                      {resume.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <Label htmlFor="job-description">Job Description</Label>
+                <Textarea
+                  id="job-description"
+                  placeholder="Paste the job description here..."
+                  value={jobDescription}
+                  onChange={(e) => setJobDescription(e.target.value)}
+                  rows={8}
+                />
+              </div>
+
+              <Button
+                onClick={handleJobMatch}
+                disabled={matching || !selectedResumeForMatching || !jobDescription.trim()}
+                className="w-full"
+              >
+                {matching ? (
+                  <>
+                    <BarChart3 className="mr-2 h-4 w-4 animate-spin" />
+                    Analyzing Match...
+                  </>
+                ) : (
+                  <>
+                    <Target className="mr-2 h-4 w-4" />
+                    Analyze Job Match
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {matchingResults && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <BarChart3 className="mr-2 h-5 w-5" />
+                  Match Results
+                </CardTitle>
+                <CardDescription>
+                  How well your resume matches this job
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-primary mb-2">
+                    {matchingResults.match_score}%
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Resume-Job Match Score
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Matched Keywords ({matchingResults.matched_keywords.length})</h4>
+                    <div className="flex flex-wrap gap-1">
+                      {matchingResults.matched_keywords.slice(0, 10).map((keyword: string, index: number) => (
+                        <Badge key={index} variant="secondary" className="text-xs">
+                          {keyword}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Missing Keywords ({matchingResults.missing_keywords.length})</h4>
+                    <div className="flex flex-wrap gap-1">
+                      {matchingResults.missing_keywords.slice(0, 10).map((keyword: string, index: number) => (
+                        <Badge key={index} variant="outline" className="text-xs">
+                          {keyword}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-medium mb-2">Recommendations</h4>
+                  <ul className="space-y-1">
+                    {matchingResults.recommendations.map((rec: string, index: number) => (
+                      <li key={index} className="text-xs text-muted-foreground flex items-start">
+                        <span className="mr-2">•</span>
+                        {rec}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <Button
+                  onClick={() => {
+                    setFormData({
+                      resume_id: selectedResumeForMatching,
+                      company_name: '',
+                      position_title: '',
+                      job_description: jobDescription,
+                      notes: `Match score: ${matchingResults.match_score}%`
+                    });
+                    setShowForm(true);
+                    setShowJobSearch(false);
+                  }}
+                  className="w-full"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Track This Application
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
 
       {/* Add Application Form */}
       {showForm && <ApplicationForm />}
