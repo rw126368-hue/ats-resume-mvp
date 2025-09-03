@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { User } from '@/types';
 import { authService } from '@/lib/auth';
+import { supabase } from '@/lib/supabase/client';
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -10,27 +11,26 @@ export function useAuth() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    const checkAuth = () => {
-      setLoading(true);
-      const authenticated = authService.isAuthenticated();
-      const currentUser = authService.getCurrentUser();
-      
-      setIsAuthenticated(authenticated);
+    const getSession = async () => {
+      const currentUser = await authService.getCurrentUser();
       setUser(currentUser);
+      setIsAuthenticated(!!currentUser);
       setLoading(false);
     };
 
-    checkAuth();
+    getSession();
 
-    // Listen for storage changes (logout in another tab)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'auth_token' || e.key === 'user_data') {
-        checkAuth();
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        const currentUser = await authService.getCurrentUser();
+        setUser(currentUser);
+        setIsAuthenticated(!!currentUser);
       }
-    };
+    );
 
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -48,7 +48,7 @@ export function useAuth() {
   const register = async (email: string, password: string, fullName?: string) => {
     setLoading(true);
     try {
-      const result = await authService.register({ email, password, full_name: fullName });
+      const result = await authService.register({ email: email, password: password, full_name: fullName });
       setUser(result.user);
       setIsAuthenticated(true);
       return result;

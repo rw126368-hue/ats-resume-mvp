@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
+import { supabase } from '@/lib/supabase/client';
 
 class ApiClient {
   private client: AxiosInstance;
@@ -17,10 +18,10 @@ class ApiClient {
 
     // Request interceptor to add auth token
     this.client.interceptors.request.use(
-      (config) => {
-        const token = this.getAuthToken();
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
+      async (config) => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          config.headers.Authorization = `Bearer ${session.access_token}`;
         }
         return config;
       },
@@ -28,50 +29,6 @@ class ApiClient {
         return Promise.reject(error);
       }
     );
-
-    // Response interceptor to handle errors
-    this.client.interceptors.response.use(
-      (response) => response,
-      (error) => {
-        if (error.response?.status === 401) {
-          // Token expired or invalid, redirect to login
-          this.clearAuthToken();
-          if (typeof window !== 'undefined') {
-            window.location.href = '/auth/login';
-          }
-        }
-        return Promise.reject(error);
-      }
-    );
-  }
-
-  private getAuthToken(): string | null {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem('auth_token');
-  }
-
-  private clearAuthToken(): void {
-    if (typeof window === 'undefined') return;
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('user_data');
-  }
-
-  // Auth endpoints
-  async register(email: string, password: string, full_name?: string) {
-    const response = await this.client.post('/auth-register', {
-      email,
-      password,
-      full_name,
-    });
-    return response.data;
-  }
-
-  async login(email: string, password: string) {
-    const response = await this.client.post('/auth-login', {
-      email,
-      password,
-    });
-    return response.data;
   }
 
   // Resume management

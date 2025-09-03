@@ -79,13 +79,15 @@ export function RegisterForm() {
     setErrors({});
     
     try {
-      await register(formData.email, formData.password, formData.fullName);
+      console.log('Attempting to register...');
+      await register(formData.fullName, formData.email, formData.password);
       toast({
         title: 'Registration Successful',
         description: 'Your account has been created successfully!',
       });
       router.push('/dashboard');
     } catch (error: any) {
+      console.error('Registration failed:', error);
       setErrors({ general: error.message });
       toast({
         title: 'Registration Failed',

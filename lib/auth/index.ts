@@ -1,156 +1,97 @@
-import { jwtDecode } from 'jwt-decode';
+import { supabase } from '@/lib/supabase/client';
 import { User, AuthResponse, LoginRequest, RegisterRequest } from '@/types';
-import { apiClient } from '@/lib/api/client';
-
-interface JWTPayload {
-  user_id: string;
-  email: string;
-  full_name?: string;
-  role?: string;
-  exp: number;
-  iat: number;
-}
 
 class AuthService {
-  private tokenKey = 'auth_token';
-  private userKey = 'user_data';
-
   // Check if user is authenticated
-  isAuthenticated(): boolean {
-    if (typeof window === 'undefined') return false;
-    
-    const token = this.getToken();
-    if (!token) return false;
-
-    try {
-      const decoded = jwtDecode<JWTPayload>(token);
-      const currentTime = Date.now() / 1000;
-      return decoded.exp > currentTime;
-    } catch {
-      this.clearAuth();
-      return false;
-    }
-  }
-
-  // Get stored token
-  getToken(): string | null {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem(this.tokenKey);
+  async isAuthenticated(): Promise<boolean> {
+    const { data } = await supabase.auth.getSession();
+    return !!data.session;
   }
 
   // Get current user
-  getCurrentUser(): User | null {
-    if (typeof window === 'undefined') return null;
-    
-    const userStr = localStorage.getItem(this.userKey);
-    if (userStr) {
-      try {
-        return JSON.parse(userStr);
-      } catch {
-        this.clearAuth();
-        return null;
-      }
-    }
+  async getCurrentUser(): Promise<User | null> {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return null;
 
-    // Try to get user from token
-    const token = this.getToken();
-    if (token) {
-      try {
-        const decoded = jwtDecode<JWTPayload>(token);
-        const user: User = {
-          id: decoded.user_id,
-          email: decoded.email,
-          full_name: decoded.full_name,
-          role: decoded.role,
-          created_at: '',
-          updated_at: ''
-        };
-        this.setUser(user);
-        return user;
-      } catch {
-        this.clearAuth();
-        return null;
-      }
-    }
-
-    return null;
-  }
-
-  // Store authentication data
-  private setAuth(token: string, user: User): void {
-    if (typeof window === 'undefined') return;
-    
-    localStorage.setItem(this.tokenKey, token);
-    localStorage.setItem(this.userKey, JSON.stringify(user));
-  }
-
-  // Store user data
-  private setUser(user: User): void {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem(this.userKey, JSON.stringify(user));
-  }
-
-  // Clear authentication data
-  clearAuth(): void {
-    if (typeof window === 'undefined') return;
-    
-    localStorage.removeItem(this.tokenKey);
-    localStorage.removeItem(this.userKey);
+    const { user } = session;
+    return {
+      id: user.id,
+      email: user.email || '',
+      full_name: user.user_metadata.full_name,
+      role: user.role,
+      created_at: user.created_at,
+      updated_at: user.updated_at || '',
+    };
   }
 
   // Login user
   async login(credentials: LoginRequest): Promise<AuthResponse> {
-    try {
-      const response = await apiClient.login(credentials.email, credentials.password);
-      
-      if (response.error) {
-        throw new Error(response.error.message);
-      }
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: credentials.email,
+      password: credentials.password,
+    });
 
-      const { user, token } = response.data;
-      this.setAuth(token, user);
-      return { user, token };
-    } catch (error: any) {
+    if (error) {
+      console.error('Supabase login error:', error);
       throw new Error(error.message || 'Login failed');
     }
+
+    if (!data.user || !data.session) {
+      throw new Error('Login failed: No user or session data');
+    }
+
+    const user: User = {
+      id: data.user.id,
+      email: data.user.email || '',
+      full_name: data.user.user_metadata.full_name,
+      role: data.user.role,
+      created_at: data.user.created_at,
+      updated_at: data.user.updated_at || '',
+    };
+
+    return { user, token: data.session.access_token };
   }
 
   // Register user
   async register(userData: RegisterRequest): Promise<AuthResponse> {
-    try {
-      const response = await apiClient.register(
-        userData.email,
-        userData.password,
-        userData.full_name
-      );
-      
-      if (response.error) {
-        throw new Error(response.error.message);
-      }
+    console.log('Registering user with data:', userData);
+    const { data, error } = await supabase.auth.signUp({
+      email: userData.email,
+      password: userData.password,
+      options: {
+        data: {
+          full_name: userData.full_name,
+        },
+      },
+    });
 
-      const { user, token } = response.data;
-      this.setAuth(token, user);
-      return { user, token };
-    } catch (error: any) {
+    if (error) {
+      console.error('Supabase registration error:', error);
       throw new Error(error.message || 'Registration failed');
     }
+
+    if (!data.user || !data.session) {
+      throw new Error('Registration failed: No user or session data');
+    }
+
+    const user: User = {
+      id: data.user.id,
+      email: data.user.email || '',
+      full_name: data.user.user_metadata.full_name,
+      role: data.user.role,
+      created_at: data.user.created_at,
+      updated_at: data.user.updated_at || '',
+    };
+
+    return { user, token: data.session.access_token };
   }
 
   // Logout user
   async logout(): Promise<void> {
-    this.clearAuth();
-    
-    // Redirect to login page
+    await supabase.auth.signOut();
     if (typeof window !== 'undefined') {
       window.location.href = '/auth/login';
     }
-  }
-
-  // Refresh token (if needed)
-  async refreshToken(): Promise<boolean> {
-    // Implementation depends on backend refresh token endpoint
-    // For now, just check if current token is valid
-    return this.isAuthenticated();
   }
 }
 
