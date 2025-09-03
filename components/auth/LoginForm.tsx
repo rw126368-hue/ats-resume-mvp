@@ -47,15 +47,10 @@ export default function LoginForm() {
     setIsSubmitting(true);
     
     try {
-      const result = await login(email, password);
-      
-      if (result.success) {
-        router.push('/dashboard');
-      } else {
-        setError(result.error || 'Login failed. Please try again.');
-      }
-    } catch (error) {
-      setError('An unexpected error occurred. Please try again.');
+      await login(email, password);
+      router.push('/dashboard');
+    } catch (error: any) {
+      setError(error.message || 'An unexpected error occurred. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

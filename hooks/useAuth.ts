@@ -40,6 +40,10 @@ export function useAuth() {
       setUser(result.user);
       setIsAuthenticated(true);
       return result;
+    } catch (error) {
+      setIsAuthenticated(false);
+      setUser(null);
+      throw error;
     } finally {
       setLoading(false);
     }

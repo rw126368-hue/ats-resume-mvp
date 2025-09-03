@@ -2,59 +2,58 @@
 
 import { useState, useCallback } from 'react';
 import { JobApplication } from '@/types';
-import { apiClient } from '@/lib/api/client';
+import { supabase } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 export function useJobApplications() {
+  const { user } = useAuth();
   const [applications, setApplications] = useState<JobApplication[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
   const fetchApplications = useCallback(async () => {
+    if (!user) return;
+
     setLoading(true);
     try {
-      const response = await apiClient.getJobApplications();
-      if (response.error) {
-        throw new Error(response.error.message);
-      }
-      setApplications(response.data || []);
+      const { data, error } = await supabase
+        .from('job_applications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setApplications(data || []);
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to fetch job applications',
+        title: 'Error fetching job applications',
+        description: error.message,
         variant: 'destructive',
       });
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [user, toast]);
 
-  const createApplication = useCallback(async (data: {
-    resume_id: string;
-    company_name: string;
-    position_title: string;
-    job_description?: string;
-    notes?: string;
-  }) => {
+  const createApplication = useCallback(async (data: Omit<JobApplication, 'id' | 'created_at' | 'updated_at' | 'user_id' | 'status'>) => {
+    if (!user) return;
+
     try {
-      const response = await apiClient.createJobApplication({
-        ...data,
-        status: 'pending',
-      });
+      const { data: newApplication, error } = await supabase
+        .from('job_applications')
+        .insert({ ...data, user_id: user.id, status: 'pending' })
+        .select()
+        .single();
       
-      if (response.error) {
-        throw new Error(response.error.message);
-      }
+      if (error) throw error;
+
+      setApplications(prev => [newApplication, ...prev]);
 
       toast({
         title: 'Success',
         description: 'Job application created successfully',
       });
-
-      // Refresh applications list
-      await fetchApplications();
-      
-      return response.data;
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -63,27 +62,30 @@ export function useJobApplications() {
       });
       throw error;
     }
-  }, [fetchApplications, toast]);
+  }, [user, toast]);
 
   const updateApplication = useCallback(async (
     id: string,
-    data: { status?: string; notes?: string }
+    data: Partial<JobApplication>
   ) => {
     try {
-      const response = await apiClient.updateJobApplication(id, data);
-      if (response.error) {
-        throw new Error(response.error.message);
-      }
+      const { data: updatedApplication, error } = await supabase
+        .from('job_applications')
+        .update(data)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setApplications(prev =>
+        prev.map(app => (app.id === id ? updatedApplication : app))
+      );
 
       toast({
         title: 'Success',
         description: 'Job application updated successfully',
       });
-
-      // Update local state
-      setApplications(prev =>
-        prev.map(app => (app.id === id ? { ...app, ...data } : app))
-      );
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -92,10 +94,6 @@ export function useJobApplications() {
       });
     }
   }, [toast]);
-
-  const getApplicationsByStatus = useCallback((status: string) => {
-    return applications.filter(app => app.status === status);
-  }, [applications]);
 
   const getApplicationStats = useCallback(() => {
     const stats = applications.reduce(
@@ -122,7 +120,6 @@ export function useJobApplications() {
     fetchApplications,
     createApplication,
     updateApplication,
-    getApplicationsByStatus,
     getApplicationStats,
   };
 }

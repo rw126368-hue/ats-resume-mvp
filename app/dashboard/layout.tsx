@@ -25,6 +25,7 @@ const navigation = [
   { name: 'AI Analysis', href: '/dashboard/analysis', icon: Brain },
   { name: 'Job Applications', href: '/dashboard/jobs', icon: Briefcase },
   { name: 'Notifications', href: '/dashboard/notifications', icon: Bell },
+  { name: 'Test Page', href: '/dashboard/test', icon: Bell },
 ];
 
 export default function DashboardLayout({
