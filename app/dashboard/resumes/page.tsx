@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { FileUpload } from '@/components/resume/file-upload';
 import { useResumes } from '@/hooks/useResumes';
-import { apiClient } from '@/lib/api/client';
+import { supabase } from '@/lib/supabase/client';
 import { formatDate, formatFileSize, getStatusColor, getScoreColor } from '@/lib/utils';
 import { 
   FileText, 
@@ -52,9 +52,11 @@ export default function ResumesPage() {
   };
 
   const handleDownload = (resume: any) => {
-    if (resume.file_path) {
-      const url = apiClient.getFileUrl(resume.file_path);
-      window.open(url, '_blank');
+    if (resume.file_name) {
+      const { data } = supabase.storage.from('resumes').getPublicUrl(resume.file_name);
+      if (data.publicUrl) {
+        window.open(data.publicUrl, '_blank');
+      }
     }
   };
 
