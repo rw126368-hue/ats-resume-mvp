@@ -1,36 +1,47 @@
 # ATS Resume Generator (MVP)
 
-## Quick Start in Codespaces
-
-Click below to open this project directly in GitHub Codespaces:
-
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/codespaces/new?hide_repo_select=true&ref=main&repo=${{ github.repository }})
-
-
 This is the MVP frontend for the ATS Resume Generator project.
 
-## Run in GitHub Codespaces
+## Getting Started
 
-1. Open this repository in GitHub Codespaces.
-2. The Dev Container will automatically:
-   - Install dependencies with `pnpm install`
-   - Start the Next.js dev server on port 3000
-3. The preview window will open automatically.
+Follow these instructions to get the project up and running on your local machine.
 
-## Environment Variables
+### Prerequisites
 
-Copy `.env.example` to `.env.local` and set:
+-   [Node.js](https://nodejs.org/) (v18 or later)
+-   [pnpm](https://pnpm.io/)
 
-```
-NEXT_PUBLIC_API_BASE_URL=https://<your-supabase-project>.supabase.co/functions/v1
-NEXT_PUBLIC_STORAGE_URL=https://<your-supabase-project>.supabase.co/storage/v1/object/public/resume-files
-```
+### Installation
 
-For the demo, you can commit `.env.local` with these public values.
+1.  **Clone the repository:**
+
+    ```bash
+    git clone https://github.com/your-username/your-repository.git
+    cd your-repository
+    ```
+
+2.  **Install dependencies:**
+
+    ```bash
+    pnpm install
+    ```
+
+3.  **Set up environment variables:**
+
+    -   Create a new file named `.env.local` in the root of the project.
+    -   Copy the content of `.env.example` into `.env.local`.
+    -   Fill in the required environment variables in `.env.local`. You can get the values from your Supabase project's dashboard.
+
+4.  **Run the development server:**
+
+    ```bash
+    pnpm dev
+    ```
+
+    The application will be available at `http://localhost:3000`.
 
 ## Scripts
 
-- `pnpm dev` – start dev server
-- `pnpm build` – build the app
-- `pnpm start` – start in production mode
-
+-   `pnpm dev` – start dev server
+-   `pnpm build` – build the app
+-   `pnpm start` – start in production mode
