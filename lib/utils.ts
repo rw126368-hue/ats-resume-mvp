@@ -47,7 +47,10 @@ export function getScoreBgColor(score: number): string {
   return 'bg-red-100';
 }
 
-export function getStatusColor(status: string): string {
+export function getStatusColor(status?: string): string {
+  if (!status) {
+    return 'text-gray-600 bg-gray-100';
+  }
   switch (status.toLowerCase()) {
     case 'published':
     case 'completed':
