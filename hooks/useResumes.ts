@@ -2,107 +2,141 @@
 
 import { useState, useCallback } from 'react';
 import { Resume } from '@/types';
-import { apiClient } from '@/lib/api/client';
+import { supabase } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 export function useResumes() {
+  const { user } = useAuth();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const { toast } = useToast();
 
   const fetchResumes = useCallback(async () => {
+    if (!user) return;
+
     setLoading(true);
     try {
-      const response = await apiClient.getResumes();
-      if (response.error) {
-        throw new Error(response.error.message);
-      }
-      setResumes(response.data || []);
+      const { data, error } = await supabase
+        .from('resumes')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setResumes(data || []);
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to fetch resumes',
+        title: 'Error fetching resumes',
+        description: error.message,
         variant: 'destructive',
       });
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [user, toast]);
 
   const uploadResume = useCallback(async (file: File, title?: string) => {
+    if (!user) {
+      toast({
+        title: 'Authentication Error',
+        description: 'You must be logged in to upload a resume.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setUploading(true);
     setUploadProgress(0);
-    
+
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      if (title) {
-        formData.append('title', title);
-      }
+      const fileName = `${user.id}/${Date.now()}_${file.name}`;
 
-      // Simulate progress for better UX
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) return prev;
-          return prev + Math.random() * 10;
+      const { error: uploadError } = await supabase.storage
+        .from('resumes')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type,
         });
-      }, 200);
 
-      const response = await apiClient.uploadResume(formData);
-      
-      clearInterval(progressInterval);
-      setUploadProgress(100);
-      
-      if (response.error) {
-        throw new Error(response.error.message);
-      }
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('resumes')
+        .getPublicUrl(fileName);
+
+      const { error: dbError } = await supabase
+        .from('resumes')
+        .insert({
+          user_id: user.id,
+          title: title || file.name,
+          file_name: fileName,
+          file_url: publicUrl,
+          file_type: file.type,
+          file_size: file.size,
+        });
+
+      if (dbError) throw dbError;
 
       toast({
         title: 'Success',
-        description: 'Resume uploaded successfully',
+        description: 'Resume uploaded successfully.',
       });
 
-      // Refresh resumes list
       await fetchResumes();
-      
-      return response.data;
+
     } catch (error: any) {
-      setUploadProgress(0);
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to upload resume',
+        title: 'Upload failed',
+        description: error.message,
         variant: 'destructive',
       });
-      throw error;
+    } finally {
+      setUploading(false);
+      setUploadProgress(100);
     }
-  }, [fetchResumes, toast]);
+  }, [user, toast, fetchResumes]);
 
   const deleteResume = useCallback(async (resumeId: string) => {
     try {
-      const response = await apiClient.deleteResume(resumeId);
-      if (response.error) {
-        throw new Error(response.error.message);
-      }
+      const resumeToDelete = resumes.find(r => r.id === resumeId);
+      if (!resumeToDelete) throw new Error("Resume not found.");
+
+      const { error: storageError } = await supabase.storage
+        .from('resumes')
+        .remove([resumeToDelete.file_name]);
+
+      if (storageError) throw storageError;
+
+      const { error: dbError } = await supabase
+        .from('resumes')
+        .delete()
+        .eq('id', resumeId);
+
+      if (dbError) throw dbError;
 
       toast({
         title: 'Success',
-        description: 'Resume deleted successfully',
+        description: 'Resume deleted successfully.',
       });
 
-      // Remove from local state
-      setResumes(prev => prev.filter(resume => resume.id !== resumeId));
+      setResumes(prev => prev.filter(r => r.id !== resumeId));
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to delete resume',
+        title: 'Delete failed',
+        description: error.message,
         variant: 'destructive',
       });
     }
-  }, [toast]);
+  }, [resumes, toast]);
 
   return {
     resumes,
     loading,
+    uploading,
     uploadProgress,
     fetchResumes,
     uploadResume,

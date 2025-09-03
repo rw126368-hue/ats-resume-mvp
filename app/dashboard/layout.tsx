@@ -23,8 +23,9 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Resume Management', href: '/dashboard/resumes', icon: FileText },
   { name: 'AI Analysis', href: '/dashboard/analysis', icon: Brain },
-  { name: 'Job Applications', href: '/dashboard/applications', icon: Briefcase },
+  { name: 'Job Applications', href: '/dashboard/jobs', icon: Briefcase },
   { name: 'Notifications', href: '/dashboard/notifications', icon: Bell },
+  { name: 'Test Page', href: '/dashboard/test', icon: Bell },
 ];
 
 export default function DashboardLayout({
