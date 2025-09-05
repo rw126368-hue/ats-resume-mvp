@@ -116,6 +116,7 @@ export interface JobApplication {
   job_posting_id: string;
   company_name: string;
   position_title: string;
+  job_description?: string;
   status: 'pending' | 'applied' | 'interviewing' | 'rejected' | 'accepted';
   applied_date: string;
   notes?: string;

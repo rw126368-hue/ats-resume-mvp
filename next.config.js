@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
+    unoptimized: true,
     domains: ['yiezeelqulecqgdpeuii.supabase.co'],
   },
   env: {
@@ -12,12 +13,6 @@ const nextConfig = {
   },
   eslint: {
     ignoreDuringBuilds: true,
-  },
-  output: 'export',
-  trailingSlash: true,
-  images: {
-    unoptimized: true,
-    domains: ['yiezeelqulecqgdpeuii.supabase.co'],
   },
 }
 

@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { FileUpload } from '@/components/resume/file-upload';
-import { useResumes } from '@/hooks/useResumes';
+import { useResumesContext } from '@/hooks/useResumesContext';
 import { supabase } from '@/lib/supabase/client';
 import { formatDate, formatFileSize, getStatusColor, getScoreColor } from '@/lib/utils';
 import { 
@@ -25,7 +25,7 @@ import {
 import Link from 'next/link';
 
 export default function ResumesPage() {
-  const { resumes, loading, uploadProgress, fetchResumes, uploadResume, deleteResume } = useResumes();
+  const { resumes, loading, uploadProgress, fetchResumes, uploadResume, deleteResume } = useResumesContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [uploading, setUploading] = useState(false);

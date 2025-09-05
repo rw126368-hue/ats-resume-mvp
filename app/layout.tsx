@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { ClientLayout } from "./client-layout";
+import { ResumesProvider } from "@/hooks/useResumesContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -16,9 +18,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        {children}
-      </body>
+      <ClientLayout className={inter.className}>
+        <ResumesProvider>
+          {children}
+        </ResumesProvider>
+      </ClientLayout>
     </html>
   );
 }

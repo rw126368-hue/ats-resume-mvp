@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/lib/supabase/client';
 import { useJobApplications } from '@/hooks/useJobApplications';
-import { useResumes } from '@/hooks/useResumes';
+import { useResumesContext } from '@/hooks/useResumesContext';
 import { useToast } from '@/hooks/use-toast';
 import { formatDate, getStatusColor } from '@/lib/utils';
 import {
@@ -72,7 +72,7 @@ export default function JobApplicationsPage() {
     createDataBackup,
     sendGmailBackup,
     performFullBackup
-  } = useResumes();
+  } = useResumesContext();
   const { toast } = useToast();
 
   const [showForm, setShowForm] = useState(false);
@@ -135,9 +135,11 @@ export default function JobApplicationsPage() {
     try {
       await createApplication({
         resume_id: formData.resume_id,
+        job_posting_id: '', // Will be set if job is selected
         company_name: formData.company_name,
         position_title: formData.position_title,
         job_description: formData.job_description,
+        applied_date: new Date().toISOString(),
         notes: formData.notes,
       });
       
@@ -168,7 +170,7 @@ export default function JobApplicationsPage() {
 
   const handleStatusUpdate = async (applicationId: string, newStatus: string) => {
     try {
-      await updateApplication(applicationId, { status: newStatus });
+      await updateApplication(applicationId, { status: newStatus as 'pending' | 'applied' | 'interviewing' | 'rejected' | 'accepted' });
       toast({
         title: 'Status Updated',
         description: 'Application status has been updated successfully',
@@ -652,13 +654,103 @@ export default function JobApplicationsPage() {
         </div>
         <div className="flex gap-2">
           <Button
-            onClick={emailMonitoring ? stopEmailMonitoring : startEmailMonitoring}
+            onClick={() => {
+              console.log('=== START EMAIL MONITORING BUTTON CLICKED ===');
+              console.log('Current emailMonitoring state:', emailMonitoring);
+              if (emailMonitoring) {
+                console.log('Stopping email monitoring...');
+                stopEmailMonitoring();
+              } else {
+                console.log('Starting email monitoring...');
+                startEmailMonitoring();
+              }
+            }}
             variant={emailMonitoring ? "destructive" : "default"}
           >
             {emailMonitoring ? 'Stop Monitoring' : 'Start Email Monitoring'}
           </Button>
-          <Button onClick={checkEmailsForJobs} variant="outline">
+          <Button
+            onClick={() => {
+              console.log('=== CHECK EMAILS NOW BUTTON CLICKED ===');
+              console.log('Calling checkEmailsForJobs function...');
+              checkEmailsForJobs();
+            }}
+            variant="outline"
+          >
             Check Emails Now
+          </Button>
+          <Button
+            onClick={async () => {
+              console.log('Test IMAP Connection button clicked');
+
+              try {
+                console.log('Getting session...');
+                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+                if (sessionError) {
+                  console.error('Session error:', sessionError);
+                  toast({
+                    title: 'Session Error',
+                    description: 'Failed to get authentication session',
+                    variant: 'destructive',
+                  });
+                  return;
+                }
+
+                if (!session) {
+                  console.log('No session found');
+                  toast({
+                    title: 'Authentication Required',
+                    description: 'Please log in to test email connection',
+                    variant: 'destructive',
+                  });
+                  return;
+                }
+
+                console.log('Session found, making API call...');
+                const response = await fetch('/api/email/test', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`,
+                  },
+                });
+
+                console.log('API response status:', response.status);
+                const result = await response.json();
+                console.log('API response:', result);
+
+                if (response.ok) {
+                  toast({
+                    title: 'IMAP Test Successful',
+                    description: result.message,
+                  });
+                } else {
+                  toast({
+                    title: 'IMAP Test Failed',
+                    description: result.error,
+                    variant: 'destructive',
+                  });
+
+                  // Show suggestions if available
+                  if (result.suggestions && result.suggestions.length > 0) {
+                    setTimeout(() => {
+                      alert(`Suggestions to fix:\n${result.suggestions.join('\n')}`);
+                    }, 1000);
+                  }
+                }
+              } catch (error: any) {
+                console.error('Test button error:', error);
+                toast({
+                  title: 'Test Failed',
+                  description: error.message || 'Unknown error occurred',
+                  variant: 'destructive',
+                });
+              }
+            }}
+            variant="outline"
+          >
+            Test IMAP Connection
           </Button>
           <Button onClick={() => autoApplyToJobs(90)} variant="outline">
             Auto-Apply (90%+ Match)

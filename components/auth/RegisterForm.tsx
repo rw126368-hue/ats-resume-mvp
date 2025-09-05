@@ -67,11 +67,11 @@ export default function RegisterForm() {
     
     try {
       const result = await register(name.trim(), email, password);
-      
-      if (result.success) {
+
+      if (result.user) {
         router.push('/dashboard');
       } else {
-        setError(result.error || 'Registration failed. Please try again.');
+        setError('Registration failed. Please try again.');
       }
     } catch (error) {
       setError('An unexpected error occurred. Please try again.');

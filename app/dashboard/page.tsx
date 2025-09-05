@@ -9,21 +9,66 @@ import { FileText, BarChart3, Briefcase, TrendingUp, Upload, Eye } from 'lucide-
 import Link from 'next/link';
 import { formatDate } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
+import { useToast } from '@/hooks/use-toast';
+import { GmailConnection } from '@/components/GmailConnection';
+import { supabase } from '@/lib/supabase/client';
 
 export default function DashboardPage() {
   const { resumes, fetchResumes, loading: resumesLoading } = useResumes();
   const { applications, fetchApplications, getApplicationStats, loading: appsLoading } = useJobApplications();
+  const { toast } = useToast();
   const [stats, setStats] = useState({
     totalResumes: 0,
     avgAtsScore: 0,
     totalApplications: 0,
     responseRate: 0
   });
+  const [gmailConnected, setGmailConnected] = useState(false);
 
   useEffect(() => {
     fetchResumes();
     fetchApplications();
-  }, [fetchResumes, fetchApplications]);
+
+    // Check for OAuth success/error messages from URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const success = urlParams.get('success');
+    const error = urlParams.get('error');
+
+    if (success === 'gmail_connected') {
+      toast({
+        title: 'Gmail Connected!',
+        description: 'Your Gmail account has been successfully connected.',
+      });
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setGmailConnected(true);
+    } else if (error) {
+      let errorMessage = 'Failed to connect Gmail account.';
+      if (error === 'oauth_failed') {
+        errorMessage = 'OAuth authorization failed.';
+      } else if (error === 'no_code') {
+        errorMessage = 'Authorization code not received.';
+      } else if (error === 'no_email') {
+        errorMessage = 'Could not retrieve email address.';
+      } else if (error === 'token_storage_failed') {
+        errorMessage = 'Failed to save authorization tokens.';
+      } else if (error === 'session_expired') {
+        errorMessage = 'Your session has expired. Please log in again.';
+      }
+
+      toast({
+        title: 'Connection Failed',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [fetchResumes, fetchApplications, toast]);
+
+  const handleGmailConnectionChange = (connected: boolean) => {
+    setGmailConnected(connected);
+  };
 
   useEffect(() => {
     if (resumes.length > 0) {
@@ -84,6 +129,8 @@ export default function DashboardPage() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <GmailConnection onConnectionChange={handleGmailConnectionChange} />
+
         <Link href="/dashboard/resumes">
           <Button className="w-full justify-start">
             <Upload className="mr-2 h-4 w-4" />

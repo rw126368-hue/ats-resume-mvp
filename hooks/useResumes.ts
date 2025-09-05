@@ -22,6 +22,8 @@ import { Resume, JobPosting, EmailJobNotification, AutoApplicationResult } from 
 import { supabase } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
+export type UseResumesReturn = ReturnType<typeof useResumes>;
+
 export function useResumes() {
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [jobs, setJobs] = useState<JobPosting[]>([]);
@@ -371,38 +373,58 @@ export function useResumes() {
   // Email monitoring and job extraction
   const checkEmailsForJobs = useCallback(async () => {
     try {
-      // This would normally connect to IMAP server
-      // For demo purposes, we'll simulate email checking
-      console.log('Checking emails for job notifications...');
+      console.log('Checking for active session...');
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-      // Simulate finding job emails
-      const mockJobEmails: EmailJobNotification[] = [
-        {
-          id: '1',
-          subject: 'New Job Opportunity: Senior Software Engineer at Google',
-          from: 'jobs@indeed.com',
-          body: 'We have a new job opportunity that matches your search for Senior Software Engineer...',
-          received_date: new Date(),
-          job_title: 'Senior Software Engineer',
-          company_name: 'Google',
-          job_description: 'We are looking for a Senior Software Engineer with 5+ years of experience in React, Node.js, and cloud technologies. Responsibilities include developing scalable web applications, leading technical initiatives, and mentoring junior developers.',
-          application_url: 'https://indeed.com/apply/google-senior-engineer',
-          processed: false
-        }
-      ];
+      if (sessionError) {
+        throw new Error(`Session error: ${sessionError.message}`);
+      }
 
-      setEmailNotifications(mockJobEmails);
+      if (!session) {
+        throw new Error('No active session. Please log in.');
+      }
 
-      toast({
-        title: 'Email Check Complete',
-        description: `Found ${mockJobEmails.length} job notifications`,
+      console.log('Session found, calling email check API...');
+      const response = await fetch('/api/email/check', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
       });
 
-      return mockJobEmails;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({
+          error: 'Failed to parse error response from server',
+        }));
+        
+        const errorMessage = errorData.error || `API Error: ${response.status}`;
+        const suggestions = errorData.suggestions ? `\n\nSuggestions:\n${errorData.suggestions.map((s: string) => `• ${s}`).join('\n')}` : ''
+
+        if (response.status === 401) {
+            throw new Error('Authentication failed. Please log in again.');
+        }
+        
+        throw new Error(`${errorMessage}${suggestions}`);
+      }
+
+      const data = await response.json();
+      if (!data.success || !Array.isArray(data.notifications)) {
+        throw new Error('Received an invalid response from the email service.');
+      }
+
+      setEmailNotifications(data.notifications);
+      toast({
+        title: 'Email Check Complete',
+        description: `Found ${data.notifications.length} new job notifications.`,
+      });
+
+      return data.notifications;
     } catch (error: any) {
+      console.error('Email check failed:', error);
       toast({
         title: 'Email Check Failed',
-        description: error.message,
+        description: error.message || 'An unknown error occurred while checking emails.',
         variant: 'destructive',
       });
       throw error;
@@ -564,42 +586,55 @@ export function useResumes() {
   }, [jobs, resumes, matchJobsWithResume, toast]);
 
   const startEmailMonitoring = useCallback(async () => {
+    console.log('=== STARTING EMAIL MONITORING ===');
     setEmailMonitoring(true);
 
     try {
+      console.log('Checking emails immediately on start...');
       // Check emails immediately
       await checkEmailsForJobs();
 
+      console.log('Setting up periodic email checking (every 5 minutes)...');
       // Set up periodic checking (every 5 minutes)
       const interval = setInterval(async () => {
+        console.log('=== PERIODIC EMAIL CHECK ===');
         await checkEmailsForJobs();
       }, 5 * 60 * 1000); // 5 minutes
 
       // Store interval ID for cleanup
       (window as any).emailCheckInterval = interval;
+      console.log('Email monitoring interval set up with ID:', interval);
 
       toast({
         title: 'Email Monitoring Started',
         description: 'System will check for job notifications every 5 minutes',
       });
+      console.log('Email monitoring started successfully');
     } catch (error: any) {
+      console.log('=== EMAIL MONITORING START FAILED ===');
+      console.error('Error starting email monitoring:', error);
       setEmailMonitoring(false);
       throw error;
     }
   }, [checkEmailsForJobs, toast]);
 
   const stopEmailMonitoring = useCallback(() => {
+    console.log('=== STOPPING EMAIL MONITORING ===');
     setEmailMonitoring(false);
 
     if ((window as any).emailCheckInterval) {
+      console.log('Clearing email check interval...');
       clearInterval((window as any).emailCheckInterval);
       (window as any).emailCheckInterval = null;
+    } else {
+      console.log('No active email check interval found');
     }
 
     toast({
       title: 'Email Monitoring Stopped',
       description: 'No longer checking for job notifications',
     });
+    console.log('Email monitoring stopped');
   }, [toast]);
 
   // Database usage monitoring
@@ -869,6 +904,13 @@ Supabase 50MB Free Tier Optimization
       clearInterval(backupInterval);
     };
   }, [monitorDatabaseUsage, cleanupOldData, deduplicateJobs, performFullBackup]);
+
+  useEffect(() => {
+    startEmailMonitoring();
+    return () => {
+      stopEmailMonitoring();
+    };
+  }, [startEmailMonitoring, stopEmailMonitoring]);
 
   return {
     resumes,
